@@ -1,0 +1,62 @@
+import streamlit as st
+from PIL import Image
+import numpy as np
+import tensorflow as tf
+import pandas as pd
+import os
+
+@st.cache_resource
+def load_model():
+    model_path = 'model/your_model.h5'  # Update with your actual model path
+    model = tf.keras.models.load_model(model_path)
+    return model
+
+@st.cache
+def load_class_dict():
+    class_dict_path = 'model/your_class_dict.csv'  # Update with your actual CSV path
+    class_df = pd.read_csv(class_dict_path)
+    class_mapping = {i: label for i, label in zip(class_df['class_index'], class_df['class'])}
+    return class_mapping
+
+model = load_model()
+class_mapping = load_class_dict()
+
+def preprocess_image(image):
+    img_size = (224, 224)  # Should match your training image size
+    image = image.resize(img_size)
+    image = np.array(image)
+    if image.shape[-1] == 4:  # If image has an alpha channel
+        image = image[..., :3]
+    image = image / 255.0  # Normalize as per training
+    image = np.expand_dims(image, axis=0)  # Add batch dimension
+    return image
+
+def main():
+    st.title("🌿 Plant Disease Classification")
+    st.write("Upload an image of a plant leaf to classify its disease.")
+
+    uploaded_files = st.file_uploader("Choose images...", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+
+    if uploaded_files:
+        for uploaded_file in uploaded_files:
+            try:
+                image = Image.open(uploaded_file)
+                st.image(image, caption=f'Uploaded Image: {uploaded_file.name}', use_column_width=True)
+                st.write("Classifying...")
+                processed_image = preprocess_image(image)
+                
+                preds = model.predict(processed_image)
+                predicted_class = np.argmax(preds, axis=1)[0]
+                confidence = preds[0][predicted_class] * 100
+
+                st.write(f"**Prediction:** {class_mapping[predicted_class]}")
+                st.write(f"**Confidence:** {confidence:.2f}%")
+
+                prob_df = pd.DataFrame(preds, columns=[class_mapping[i] for i in range(len(class_mapping))])
+                st.bar_chart(prob_df.T)
+                st.write("---")
+            except Exception as e:
+                st.error(f"Error processing {uploaded_file.name}: {e}")
+
+if __name__ == "__main__":
+    main()
