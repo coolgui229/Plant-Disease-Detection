@@ -1,0 +1,60 @@
+
+import os
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+def split_data(data_dir, test_size=0.2, valid_size=0.2):
+    # List all files in the directory
+    file_paths = []
+    labels = []
+    
+    for label_dir in os.listdir(data_dir):
+        class_dir = os.path.join(data_dir, label_dir)
+        
+        if os.path.isdir(class_dir):
+            for file in os.listdir(class_dir):
+                file_paths.append(os.path.join(class_dir, file))
+                labels.append(label_dir)
+    
+    # Create a DataFrame
+    df = pd.DataFrame({'file_path': file_paths, 'label': labels})
+    
+    # Split data into train and test
+    train_df, test_df = train_test_split(df, test_size=test_size, stratify=df['label'])
+    
+    # Further split train data into train and validation sets
+    train_df, valid_df = train_test_split(train_df, test_size=valid_size / (1 - test_size), stratify=train_df['label'])
+    
+    return train_df, valid_df, test_df
+
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+def create_gens(train_df, valid_df, test_df, batch_size):
+    # Define ImageDataGenerators with basic augmentations for training
+    train_datagen = ImageDataGenerator(rescale=1./255, rotation_range=20, width_shift_range=0.2,
+                                       height_shift_range=0.2, shear_range=0.2, zoom_range=0.2, horizontal_flip=True)
+    valid_test_datagen = ImageDataGenerator(rescale=1./255)  # Only rescaling for validation and test
+
+    # Create generators
+    train_gen = train_datagen.flow_from_dataframe(train_df, x_col='file_path', y_col='label',
+                                                  target_size=(224, 224), batch_size=batch_size, class_mode='categorical')
+    valid_gen = valid_test_datagen.flow_from_dataframe(valid_df, x_col='file_path', y_col='label',
+                                                       target_size=(224, 224), batch_size=batch_size, class_mode='categorical')
+    test_gen = valid_test_datagen.flow_from_dataframe(test_df, x_col='file_path', y_col='label',
+                                                      target_size=(224, 224), batch_size=batch_size, class_mode='categorical', shuffle=False)
+    
+    return train_gen, valid_gen, test_gen
+
+
+data_dir = '/kaggle/input/plantvillage-dataset/color'
+
+try:
+    # Get splitted data
+    train_df, valid_df, test_df = split_data(data_dir)
+
+    # Get Generators
+    batch_size = 40
+    train_gen, valid_gen, test_gen = create_gens(train_df, valid_df, test_df, batch_size)
+
+except:
+    print('Invalid Input')
